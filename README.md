@@ -2,153 +2,120 @@
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>五度標記法即時糾正系統</title>
+    <title>五度標記法即時追蹤 - 專業版</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.4.0/p5.js"></script>
     <script src="https://unpkg.com/ml5@latest/dist/ml5.min.js"></script>
     <style>
-        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; text-align: center; background: #f8f9fa; margin: 0; padding: 20px; }
-        .container { max-width: 900px; margin: auto; background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.1); }
-        #canvas-holder { position: relative; border: 2px solid #ddd; border-radius: 8px; overflow: hidden; margin: 20px 0; }
-        .controls { display: flex; justify-content: center; gap: 10px; margin-bottom: 20px; }
-        button { padding: 10px 20px; font-size: 16px; cursor: pointer; border: none; border-radius: 5px; transition: 0.3s; }
-        .btn-start { background: #28a745; color: white; }
-        .btn-calibrate { background: #007bff; color: white; }
-        .status-bar { font-size: 14px; color: #666; margin-bottom: 10px; }
-        .debug-info { font-family: monospace; font-size: 12px; color: #999; }
+        body { font-family: 'PingFang TC', sans-serif; text-align: center; background: #1a1a1a; color: #fff; }
+        #canvas-container { margin: 20px auto; border: 3px solid #444; width: 800px; border-radius: 8px; overflow: hidden; }
+        .controls { margin-bottom: 10px; color: #aaa; }
     </style>
 </head>
 <body>
-
-<div class="container">
-    <h1>五韻．五度標記法糾正</h1>
-    <div class="status-bar" id="status">正在載入 AI 模型...</div>
-    
+    <h1>五度標記法即時發音辨識</h1>
     <div class="controls">
-        <button class="btn-calibrate" id="calBtn" onclick="toggleCalibration()">1. 開始校準 (請發平聲)</button>
-        <button class="btn-start" id="startBtn" onclick="toggleAudio()">2. 開始偵測</button>
+        狀態：<span id="status">模型載入中...</span> | 
+        頻率：<span id="freq">0</span> Hz
     </div>
+    <div id="canvas-container"></div>
 
-    <div id="canvas-holder"></div>
-    
-    <div class="debug-info">
-        基準音高 (3度): <span id="baseFreq">未設定</span> Hz | 
-        即時音高: <span id="currentFreq">0</span> Hz
-    </div>
-</div>
+    <script>
+        let pitch;
+        let audioContext;
+        let mic;
+        let points = []; // 儲存繪製點
+        const maxPoints = 400; // 畫面最多呈現的點數
+        let userBaseLog = null; // 使用者的基準音高（對數）
 
-<script>
-let pitch;
-let audioContext;
-let isListening = false;
-let isCalibrating = false;
-let baseFrequency = 200; // 預設基準
-let history = [];
-let maxHistory = 400;
-
-// 五度標記法參數：半音寬度 (通常 5 度涵蓋約 4-6 個半音)
-const SEMITONE_RANGE = 5; 
-
-function setup() {
-    let cnv = createCanvas(800, 400);
-    cnv.parent('canvas-holder');
-    audioContext = getAudioContext();
-}
-
-function modelLoaded() {
-    document.getElementById('status').innerText = "模型載入成功！請先點擊校準。";
-}
-
-function toggleAudio() {
-    if (!isListening) {
-        userStartAudio().then(() => {
+        function setup() {
+            const canvas = createCanvas(800, 400);
+            canvas.parent('canvas-container');
+            audioContext = getAudioContext();
             mic = new p5.AudioIn();
             mic.start(() => {
-                pitch = ml5.pitchDetection('https://cdn.jsdelivr.net/gh/ml5js/ml5-data-and-models/models/pitch-detection/crepe/', audioContext, mic.stream, modelLoaded);
-                isListening = true;
-                document.getElementById('status').innerText = "偵測中...";
-                loop();
+                pitch = ml5.pitchDetection('./model/', audioContext, mic.stream, () => {
+                    select('#status').html('請開始發音');
+                    getPitch();
+                });
             });
-        });
-    }
-}
-
-function toggleCalibration() {
-    isCalibrating = true;
-    document.getElementById('status').innerText = "請用平時說話的音高發出「啊—」三秒...";
-    setTimeout(() => {
-        isCalibrating = false;
-        document.getElementById('status').innerText = "校準完成！現在可以開始測試發音。";
-    }, 3000);
-}
-
-function draw() {
-    background(255);
-    drawFiveDegrees();
-
-    if (isListening && pitch) {
-        pitch.getPitch((err, freq) => {
-            if (freq) {
-                if (isCalibrating) {
-                    baseFrequency = freq;
-                    document.getElementById('baseFreq').innerText = floor(baseFrequency);
-                }
-                document.getElementById('currentFreq').innerText = floor(freq);
-                
-                // 核心轉換邏輯：Hz -> 半音 -> 五度值
-                let semitoneDiff = 12 * Math.log2(freq / baseFrequency);
-                // 將 3度(0) 映射到畫布中間，SEMITION_RANGE 控制靈敏度
-                let toneLevel = map(semitoneDiff, -SEMITONE_RANGE, SEMITONE_RANGE, 1, 5);
-                history.push(toneLevel);
-            } else {
-                history.push(null); // 無聲時留白
-            }
-            
-            if (history.length > maxHistory) {
-                history.shift();
-            }
-        });
-    }
-
-    renderCurve();
-}
-
-function drawFiveDegrees() {
-    strokeWeight(1);
-    textAlign(LEFT, CENTER);
-    for (let i = 1; i <= 5; i++) {
-        let y = map(i, 1, 5, height - 50, 50);
-        stroke(230);
-        line(0, y, width, y);
-        noStroke();
-        fill(150);
-        text(i + ' 度', 10, y - 10);
-    }
-    
-    // 繪製「現在偵測點」的分隔線 (8:2 比例)
-    stroke(200, 0, 0, 50);
-    line(width * 0.8, 0, width * 0.8, height);
-}
-
-function renderCurve() {
-    noFill();
-    strokeWeight(4);
-    stroke(0, 123, 255);
-    
-    beginShape();
-    for (let i = 0; i < history.length; i++) {
-        if (history[i] !== null) {
-            let x = i * (width / maxHistory);
-            let y = map(history[i], 1, 5, height - 50, 50);
-            vertex(x, y);
-        } else {
-            endShape();
-            beginShape();
         }
-    }
-    endShape();
-}
-</script>
 
+        function getPitch() {
+            pitch.getPitch((err, frequency) => {
+                if (frequency && frequency > 50 && frequency < 1000) {
+                    select('#freq').html(floor(frequency));
+                    
+                    // 1. 將頻率轉為對數半音值
+                    let logFreq = Math.log2(frequency);
+                    
+                    // 2. 自動校準：如果還沒有基準，就以第一聲為基準
+                    if (userBaseLog === null) userBaseLog = logFreq;
+                    // 緩慢跟蹤使用者的中音域 (Simple Smoothing)
+                    userBaseLog = lerp(userBaseLog, logFreq, 0.01);
+
+                    // 3. 映射到五度 (假設音域範圍為上下各 5 個半音)
+                    let toneValue = map(logFreq, userBaseLog - 0.5, userBaseLog + 0.5, 1, 5);
+                    points.push(toneValue);
+                } else {
+                    // 沒聲音時推入 null 保持曲線斷開
+                    points.push(null);
+                }
+
+                // 保持陣列長度，實現滾動感
+                if (points.length > maxPoints) {
+                    points.shift();
+                }
+                getPitch();
+            });
+        }
+
+        function draw() {
+            background(30);
+            drawGrid();
+            
+            noFill();
+            strokeWeight(4);
+            stroke(0, 255, 200);
+
+            // 計算繪製起點，實現「左 8 右 2」的視覺感
+            // 我們永遠畫到畫布的 80% (width * 0.8)
+            let drawWidth = width * 0.8;
+            let step = drawWidth / maxPoints;
+
+            beginShape();
+            for (let i = 0; i < points.length; i++) {
+                if (points[i] !== null) {
+                    let x = i * step;
+                    let y = map(points[i], 1, 5, height - 50, 50);
+                    vertex(x, y);
+                } else {
+                    endShape();
+                    beginShape();
+                }
+            }
+            endShape();
+
+            // 繪製掃描線指示器
+            stroke(255, 100, 100, 150);
+            strokeWeight(1);
+            line(points.length * step, 0, points.length * step, height);
+        }
+
+        function drawGrid() {
+            stroke(60);
+            strokeWeight(1);
+            for (let i = 1; i <= 5; i++) {
+                let y = map(i, 1, 5, height - 50, 50);
+                line(0, y, width, y);
+                fill(100);
+                noStroke();
+                textSize(16);
+                text(i + " 度", width * 0.85, y + 5);
+            }
+            // 繪製 80% 邊界線
+            stroke(100, 100, 255, 50);
+            line(width * 0.8, 0, width * 0.8, height);
+        }
+    </script>
 </body>
 </html>
