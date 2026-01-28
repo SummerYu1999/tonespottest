@@ -4,116 +4,109 @@ There are five different tones in Chinese, and this is the tool to make sure if 
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
-    <title>注音五度標記偵測器</title>
+    <title>五度標記正音器 - 頻率增強版</title>
     <style>
         body { font-family: sans-serif; display: flex; height: 100vh; margin: 0; background: #1a1a1a; color: white; }
-        #left { flex: 1; padding: 20px; border-right: 1px solid #444; display: flex; flex-direction: column; }
-        #right { width: 350px; padding: 20px; overflow-y: auto; background: #222; }
-        canvas { background: #000; width: 100%; height: 350px; border-radius: 8px; }
-        .controls { margin-bottom: 20px; }
-        button { padding: 12px; margin: 5px; cursor: pointer; border-radius: 5px; border: none; background: #4a90e2; color: white; font-weight: bold; }
-        button:disabled { background: #555; }
-        .level-info { font-size: 24px; color: #00ff00; margin: 10px 0; }
-        h3 { color: #4a90e2; border-bottom: 1px solid #444; padding-bottom: 5px; }
-        li { margin: 10px 0; font-size: 16px; border-bottom: 1px solid #333; padding-bottom: 5px; list-style: none; }
+        #left { flex: 1; padding: 20px; display: flex; flex-direction: column; align-items: center; }
+        #right { width: 300px; padding: 20px; background: #222; overflow-y: auto; font-size: 14px; }
+        canvas { background: #000; width: 100%; height: 400px; border: 2px solid #444; border-radius: 10px; }
+        .controls { margin-bottom: 15px; }
+        .stat { font-size: 28px; font-family: monospace; color: #00ff00; margin-bottom: 10px; }
+        button { padding: 12px 20px; font-size: 16px; cursor: pointer; background: #4a90e2; color: white; border: none; border-radius: 5px; }
+        li { margin-bottom: 8px; border-bottom: 1px solid #333; padding-bottom: 5px; }
     </style>
 </head>
 <body>
     <div id="left">
-        <h2>五度標記即時偵測</h2>
+        <div class="stat">音高：<span id="hzDisplay">0</span> Hz | 樓層：<span id="lvDisplay">-</span></div>
         <div class="controls">
-            <button id="startBtn">1. 開啟麥克風</button>
-            <button id="caliBtn" disabled>2. 校準音域 (5秒高低音)</button>
+            <button id="startBtn">開始偵測</button>
+            <button id="caliBtn" style="background:#e67e22">校準(5秒：低到高)</button>
         </div>
-        <div class="level-info">樓層：<span id="levelDisplay">--</span> | <span id="hzDisplay">--</span> Hz</div>
         <canvas id="canvas"></canvas>
+        <p style="color:#888">註：若線條不動，請確保說話聲音清晰。程式已鎖定頻率，不受音量影響。</p>
     </div>
     <div id="right">
-        <h3>日常詞組練習表</h3>
-        <ul>
-            <li><b>ㄅ：</b>八方、拔起、把持、霸道、爸爸、好吧</li>
-            <li><b>ㄉ：</b>單獨、跌倒、低調、地道、弟弟、等等</li>
-            <li><b>ㄍ：</b>廣告、改革、鞏固、尷尬、哥哥、姑姑</li>
-            <li><b>ㄓ：</b>真正、支持、住宅、執著、知道、指教</li>
-            <li><b>ㄧ：</b>意義、記憶、稀奇、阿姨、低頭、一直</li>
-            <li><b>ㄦ：</b>女兒、兒歌、而且、耳環、二胡、兒童</li>
-        </ul>
+        <h3>練習清單</h3>
+        <ul id="list"></ul>
     </div>
-    <script>
-        let audioCtx, analyser, dataArray, source;
-        let minHz = 100, maxHz = 350;
-        let isCalibrating = false;
-        const canvas = document.getElementById('canvas');
-        const ctx = canvas.getContext('2d');
-        let history = [];
 
-        document.getElementById('startBtn').onclick = async function() {
-            audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-            source = audioCtx.createMediaStreamSource(stream);
-            analyser = audioCtx.createAnalyser();
-            analyser.fftSize = 2048;
-            source.connect(analyser);
-            dataArray = new Float32Array(analyser.frequencyBinCount);
-            this.disabled = true;
-            document.getElementById('caliBtn').disabled = false;
-            render();
-        };
+<script>
+let audioCtx, analyser, dataArray;
+let minHz = 100, maxHz = 350, isCalib = false;
+const canvas = document.getElementById('canvas'), ctx = canvas.getContext('2d');
+let history = new Array(800).fill(null);
 
-        document.getElementById('caliBtn').onclick = function() {
-            isCalibrating = true;
-            minHz = 1000; maxHz = 50;
-            alert("請在5秒內由低到高發出「啊——」的聲音");
-            setTimeout(() => { isCalibrating = false; alert("校準完成！"); }, 5000);
-        };
+// 初始化單詞表
+const words = ["ㄅ：八方(55)、爸爸(51)","ㄉ：單獨(55-35)","ㄓ：真正(55-55)","ㄕ：事實(51-51)","三聲：把、改、指(214)"];
+words.forEach(w => { let li = document.createElement('li'); li.innerText = w; document.getElementById('list').appendChild(li); });
 
-        function render() {
-            requestAnimationFrame(render);
-            analyser.getFloatTimeDomainData(dataArray);
-            let pitch = autoCorrelate(dataArray, audioCtx.sampleRate);
-            if (pitch && pitch > 60 && pitch < 800) {
-                document.getElementById('hzDisplay').innerText = Math.round(pitch);
-                if (isCalibrating) {
-                    if (pitch < minHz) minHz = pitch;
-                    if (pitch > maxHz) maxHz = pitch;
-                }
-                let level = 1 + 4 * (Math.log(pitch) - Math.log(minHz)) / (Math.log(maxHz) - Math.log(minHz));
-                level = Math.max(1, Math.min(5, level));
-                document.getElementById('levelDisplay').innerText = level.toFixed(1);
-                history.push(level);
-            } else { history.push(null); }
-            if (history.length > canvas.width) history.shift();
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-            ctx.strokeStyle = "#444";
-            for(let i=1; i<=5; i++) {
-                let y = canvas.height - (i-1) * (canvas.height/4);
-                ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(canvas.width, y); ctx.stroke();
-                ctx.fillStyle = "#888"; ctx.fillText(i+"樓", 5, y-5);
-            }
-            ctx.beginPath(); ctx.strokeStyle = "#00ff00"; ctx.lineWidth = 3;
-            for(let i=0; i<history.length; i++) {
-                if (history[i] === null) continue;
-                let y = canvas.height - (history[i]-1) * (canvas.height/4);
-                if (i===0) ctx.moveTo(i, y); else ctx.lineTo(i, y);
-            }
-            ctx.stroke();
+document.getElementById('startBtn').onclick = async () => {
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    const source = audioCtx.createMediaStreamSource(stream);
+    analyser = audioCtx.createAnalyser();
+    analyser.fftSize = 2048;
+    source.connect(analyser);
+    dataArray = new Float32Array(analyser.fftSize);
+    loop();
+};
+
+document.getElementById('caliBtn').onclick = () => {
+    isCalib = true; minHz = 1000; maxHz = 50;
+    setTimeout(() => { isCalib = false; alert("校準完成！"); }, 5000);
+};
+
+function loop() {
+    requestAnimationFrame(loop);
+    analyser.getFloatTimeDomainData(dataArray);
+    let pitch = findPitch(dataArray, audioCtx.sampleRate);
+
+    if (pitch && pitch > 70 && pitch < 600) {
+        document.getElementById('hzDisplay').innerText = Math.round(pitch);
+        if (isCalib) {
+            minHz = Math.min(minHz, pitch);
+            maxHz = Math.max(maxHz, pitch);
         }
+        let lv = 1 + 4 * (Math.log2(pitch/minHz) / Math.log2(maxHz/minHz));
+        lv = Math.max(1, Math.min(5, lv));
+        document.getElementById('lvDisplay').innerText = lv.toFixed(1);
+        history.push(lv);
+    } else {
+        history.push(null);
+    }
+    if (history.length > canvas.width) history.shift();
+    draw();
+}
 
-        function autoCorrelate(buf, sampleRate) {
-            let rms = 0;
-            for (let i=0; i<buf.length; i++) rms += buf[i]*buf[i];
-            if (Math.sqrt(rms/buf.length) < 0.015) return null;
-            let r1 = 0, r2 = buf.length-1, thres = 0.2;
-            for (let i=0; i<buf.length/2; i++) if (Math.abs(buf[i]) < thres) { r1 = i; break; }
-            for (let i=1; i<buf.length/2; i++) if (Math.abs(buf[buf.length-i]) < thres) { r2 = buf.length-i; break; }
-            buf = buf.slice(r1, r2);
-            let c = new Array(buf.length).fill(0);
-            for (let i=0; i<buf.length; i++) for (let j=0; j<buf.length-i; j++) c[i] = c[i] + buf[j]*buf[j+i];
-            let d=0; while (c[d]>c[d+1]) d++;
-            let maxval = -1, maxpos = -1;
-            for (let i=d; i<buf.length; i++) if (c[i] > maxval) { maxval = c[i]; maxpos = i; }
-            return sampleRate/maxpos;
-        }
-    </script>
+function findPitch(data, sampleRate) {
+    let n = data.length, r = new Float32Array(n), sum = 0;
+    for (let i = 0; i < n; i++) {
+        for (let j = 0; j < n - i; j++) r[i] += data[j] * data[j + i];
+    }
+    let d = 0; while (r[d] > r[d+1]) d++;
+    let maxV = -1, maxP = -1;
+    for (let i = d; i < n; i++) { if (r[i] > maxV) { maxV = r[i]; maxP = i; } }
+    return sampleRate / maxP;
+}
+
+function draw() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.strokeStyle = "#444";
+    for(let i=1; i<=5; i++) {
+        let y = canvas.height - (i-1) * (canvas.height/4);
+        ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(canvas.width, y); ctx.stroke();
+        ctx.fillStyle = "#888"; ctx.fillText(i+"樓", 5, y-5);
+    }
+    ctx.beginPath(); ctx.strokeStyle = "#00ff00"; ctx.lineWidth = 4;
+    for(let i=0; i<history.length; i++) {
+        if (history[i] === null) continue;
+        let y = canvas.height - (history[i]-1) * (canvas.height/4);
+        if (i===0) ctx.moveTo(i, y); else ctx.lineTo(i, y);
+    }
+    ctx.stroke();
+}
+</script>
 </body>
+</html>
 </html>
