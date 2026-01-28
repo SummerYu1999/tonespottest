@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>注音五度標記正音儀 - 專業核心版</title>
+    <title>注音五度標記正音儀 - 純原生版</title>
     <style>
         body { font-family: "PingFang TC", "Microsoft JhengHei", sans-serif; background: #0a0a0a; color: #fff; margin: 0; display: flex; height: 100vh; overflow: hidden; }
         #main { flex: 1; display: flex; flex-direction: column; padding: 20px; }
@@ -17,7 +17,7 @@
         .stat-label { font-size: 12px; color: #888; display: block; }
         .stat-value { font-size: 28px; font-family: 'Courier New', monospace; color: #00ff00; font-weight: bold; }
 
-        canvas { background: #000; flex: 1; border-radius: 15px; border: 2px solid #333; box-shadow: inset 0 0 20px rgba(0,0,0,1); }
+        canvas { background: #000; flex: 1; border-radius: 15px; border: 2px solid #333; }
         
         .controls { display: flex; gap: 12px; margin-bottom: 15px; }
         button { flex: 1; padding: 14px; border: none; border-radius: 8px; cursor: pointer; font-weight: bold; font-size: 16px; transition: 0.3s; color: white; }
@@ -39,12 +39,12 @@
 <div id="main">
     <div class="header">
         <div class="title">注音五度標記正音儀</div>
-        <div class="zhuyin-text">原生偵測引擎 v8.0</div>
+        <div class="zhuyin-text">原生偵測引擎 v9.0</div>
     </div>
 
     <div class="controls">
         <button id="startBtn">1. 開啟偵測器</button>
-        <button id="caliBtn" disabled>2. 唸例句校準音域</button>
+        <button id="caliBtn" disabled>2. 唸例句校準</button>
     </div>
 
     <div class="stat-card">
@@ -56,24 +56,19 @@
 </div>
 
 <div id="side">
-    <h3>校準例句</h3>
+    <h3>練習例句</h3>
     <div class="sentence-box">
         <div class="sentence-text">他拔起把柄</div>
         <div class="zhuyin-text">ㄊㄚ ㄅㄚˊ ㄑㄧˇ ㄅㄚˇ ㄅㄧㄥˇ</div>
     </div>
 
-    <h3>聲調觀察重點</h3>
+    <h3>聲調觀察指南</h3>
     <div class="tone-guide">
-        <b>● 一聲 (55):</b> 高平線，維持在頂端。<br>
-        <b>● 二聲 (35):</b> 斜升線，由中向高衝。<br>
-        <b>● 三聲 (214):</b> 降升線，要壓到底部。<br>
-        <b>● 四聲 (51):</b> 垂直線，由高急速降。<br>
+        <b>● 一聲 (55):</b> 高平線，維持在 5 樓。<br>
+        <b>● 二聲 (35):</b> 斜升線，3 樓衝到 5 樓。<br>
+        <b>● 三聲 (214):</b> 降升線，壓到 1 樓再勾起。<br>
+        <b>● 四聲 (51):</b> 垂直線，由 5 樓急速墜落。<br>
     </div>
-    
-    <p style="font-size: 12px; color: #666; margin-top: 40px;">
-        ※ 本頁面採 YIN 基頻追蹤技術。<br>
-        ※ 建議使用個人電腦與獨立麥克風。
-    </p>
 </div>
 
 <script>
@@ -86,7 +81,6 @@ let history = [];
 const canvas = document.getElementById('canvas');
 const ctx = canvas.getContext('2d');
 
-// 啟動音訊核心
 document.getElementById('startBtn').onclick = async () => {
     try {
         audioCtx = new (window.AudioContext || window.webkitAudioContext)({ latencyHint: 'interactive' });
@@ -100,93 +94,69 @@ document.getElementById('startBtn').onclick = async () => {
         dataArray = new Float32Array(analyser.fftSize);
 
         document.getElementById('startBtn').disabled = true;
-        document.getElementById('startBtn').innerText = "運行中 RUNNING";
+        document.getElementById('startBtn').innerText = "偵測中...";
         document.getElementById('caliBtn').disabled = false;
         
         history = new Array(Math.floor(canvas.offsetWidth)).fill(null);
-        requestAnimationFrame(update);
+        loop();
     } catch (e) {
-        alert("麥克風啟動失敗，請確認是否允許存取！");
+        alert("麥克風存取失敗！");
     }
 };
 
-// 執行校準
 document.getElementById('caliBtn').onclick = () => {
     isCalibrating = true;
     tempMin = 500; tempMax = 80;
-    alert("請用自然的語氣唸出：『他拔起把柄』");
+    alert("請自然讀出：他拔起把柄");
     setTimeout(() => {
         isCalibrating = false;
-        if(tempMax > tempMin + 25) {
+        if(tempMax > tempMin + 30) {
             minHz = tempMin; maxHz = tempMax;
         }
     }, 5000);
 };
 
-// YIN 演算法實作 - 這能提供最穩定的音高偵測
-function detectPitch(buffer, sampleRate) {
+// YIN 核心演算 - 確保即時回饋
+function getYinPitch(buffer, sampleRate) {
     let size = buffer.length / 2;
     let yinBuffer = new Float32Array(size);
-    
-    // 1. 差分函數 (Difference function)
-    for (let t = 0; t < size; t++) {
+    for (let t = 1; t < size; t++) {
         for (let i = 0; i < size; i++) {
             let delta = buffer[i] - buffer[i + t];
             yinBuffer[t] += delta * delta;
         }
     }
-
-    // 2. 累積均值歸一化差分 (CMNDF)
     yinBuffer[0] = 1;
     let runningSum = 0;
     for (let t = 1; t < size; t++) {
         runningSum += yinBuffer[t];
         yinBuffer[t] *= t / runningSum;
     }
-
-    // 3. 設定閾值尋找週期
-    let threshold = 0.15;
     let tau = -1;
     for (let t = 1; t < size; t++) {
-        if (yinBuffer[t] < threshold) {
-            while (t + 1 < size && yinBuffer[t + 1] < yinBuffer[t]) t++;
+        if (yinBuffer[t] < 0.15) {
             tau = t;
             break;
         }
     }
-
-    if (tau === -1) return null;
-
-    // 4. 拋物線插值精確化
-    let betterTau;
-    let x0 = tau - 1, x2 = tau + 1;
-    if (x0 >= 0 && x2 < size) {
-        let s0 = yinBuffer[x0], s1 = yinBuffer[tau], s2 = yinBuffer[x2];
-        betterTau = tau + (s2 - s0) / (2 * (2 * s1 - s2 - s0));
-    } else {
-        betterTau = tau;
-    }
-
-    return sampleRate / betterTau;
+    return tau === -1 ? null : sampleRate / tau;
 }
 
-function update() {
+function loop() {
     analyser.getFloatTimeDomainData(dataArray);
-    
-    // 計算能量確保音量足夠
     let rms = 0;
     for (let i = 0; i < dataArray.length; i++) rms += dataArray[i] * dataArray[i];
     rms = Math.sqrt(rms / dataArray.length);
 
-    if (rms > 0.01) {
-        let pitch = detectPitch(dataArray, audioCtx.sampleRate);
-        if (pitch && pitch > 75 && pitch < 500) {
-            document.getElementById('hzVal').innerText = Math.round(pitch);
+    if (rms > 0.015) {
+        let p = getYinPitch(dataArray, audioCtx.sampleRate);
+        if (p && p > 70 && p < 600) {
+            document.getElementById('hzVal').innerText = Math.round(p);
             if(isCalibrating) {
-                tempMin = Math.min(tempMin, pitch);
-                tempMax = Math.max(tempMax, pitch);
+                tempMin = Math.min(tempMin, p);
+                tempMax = Math.max(tempMax, p);
             }
-            let lv = 1 + 4 * (pitch - minHz) / (maxHz - minHz);
+            let lv = 1 + 4 * (p - minHz) / (maxHz - minHz);
             lv = Math.max(1, Math.min(5, lv));
             document.getElementById('lvVal').innerText = lv.toFixed(1);
             history.push(lv);
@@ -194,54 +164,32 @@ function update() {
     } else { history.push(null); }
 
     if (history.length > canvas.offsetWidth) history.shift();
-    draw();
-    requestAnimationFrame(update);
-}
-
-function draw() {
+    
+    // 繪圖
     if (canvas.width !== canvas.offsetWidth) canvas.width = canvas.offsetWidth;
     if (canvas.height !== canvas.offsetHeight) canvas.height = canvas.offsetHeight;
-    
     ctx.fillStyle = "#000";
     ctx.fillRect(0, 0, canvas.width, canvas.height);
-    
-    const margin = 50;
-    const h = canvas.height - margin * 2;
-    
-    // 繪製背景五度線
-    ctx.lineWidth = 1;
+    const m = 50, h = canvas.height - m * 2;
     for(let i=1; i<=5; i++) {
-        let y = canvas.height - margin - (i-1)*(h/4);
-        ctx.strokeStyle = (i === 1 || i === 5) ? "#444" : "#222";
+        let y = canvas.height - m - (i-1)*(h/4);
+        ctx.strokeStyle = "#333";
         ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(canvas.width, y); ctx.stroke();
-        ctx.fillStyle = "#666"; ctx.font = "14px Arial";
-        ctx.fillText(i + " 樓", 10, y - 5);
+        ctx.fillStyle = "#666"; ctx.fillText(i + "F", 10, y - 5);
     }
-    
-    // 繪製聲調路徑
     ctx.beginPath();
     ctx.strokeStyle = "#00ff00";
     ctx.lineWidth = 4;
-    ctx.lineCap = "round";
-    ctx.lineJoin = "round";
-    
-    let isDrawing = false;
+    let drawing = false;
     for(let i=0; i<history.length; i++) {
-        if (history[i] === null) {
-            isDrawing = false;
-            continue;
-        }
-        let y = canvas.height - margin - (history[i]-1)*(h/4);
-        if (!isDrawing) {
-            ctx.moveTo(i, y);
-            isDrawing = true;
-        } else {
-            ctx.lineTo(i, y);
-        }
+        if (history[i] === null) { drawing = false; continue; }
+        let y = canvas.height - m - (history[i]-1)*(h/4);
+        if (!drawing) { ctx.moveTo(i, y); drawing = true; }
+        else { ctx.lineTo(i, y); }
     }
     ctx.stroke();
+    requestAnimationFrame(loop);
 }
 </script>
 </body>
 </html>
-
