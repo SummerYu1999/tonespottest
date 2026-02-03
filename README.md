@@ -1,26 +1,20 @@
-<div class="anatomy-container" style="text-align: center; margin: 20px 0; background: #fff; padding: 20px; border-radius: 15px; border: 1px solid #eee;">
-    <svg id="speech-organs" width="350" height="300" viewBox="0 0 250 200" style="background: #f9f9f9; border-radius: 10px;">
-        <path d="M 50 20 Q 40 20 35 40 L 35 70 Q 30 80 40 85 L 40 130 Q 35 160 80 170" fill="none" stroke="#ddd" stroke-width="2" />
+<div class="anatomy-box" style="background: #fdfdfd; padding: 20px; border-radius: 15px; text-align: center;">
+    <svg width="320" height="300" viewBox="0 0 200 200">
+        <path d="M 40 20 Q 30 20 25 40 L 25 70 Q 20 85 35 90 L 35 125 Q 30 155 70 165" fill="none" stroke="#e0e0e0" stroke-width="3"/>
         
-        <path id="pos-nasal" d="M 60 40 Q 100 20 160 50" fill="none" stroke="#ccc" stroke-width="3" />
+        <path id="part-nasal" d="M 50 40 Q 90 20 140 45" fill="none" stroke="#eee" stroke-width="8" stroke-linecap="round"/>
         
-        <path id="pos-palate" d="M 55 85 Q 60 85 65 85 Q 85 60 160 80" fill="none" stroke="#ccc" stroke-width="5" />
+        <path id="part-palate" d="M 45 85 Q 70 65 130 85" fill="none" stroke="#f0f0f0" stroke-width="6" />
         
-        <rect x="52" y="85" width="4" height="8" fill="#eee" stroke="#ccc" />
-        
-        <rect x="52" y="115" width="4" height="8" fill="#eee" stroke="#ccc" />
+        <g fill="white" stroke="#ccc" stroke-width="0.5">
+            <rect x="44" y="85" width="5" height="8"/> <rect x="44" y="108" width="5" height="8"/> </g>
 
-        <path id="pos-u-lip" d="M 40 85 Q 45 85 50 85" fill="none" stroke="#ccc" stroke-width="8" stroke-linecap="round" />
-        
-        <path id="pos-l-lip" d="M 40 125 Q 45 125 50 125" fill="none" stroke="#ccc" stroke-width="8" stroke-linecap="round" />
-        
-        <path id="pos-tongue" d="M 65 125 Q 100 115 150 140 Q 130 170 80 165 Z" fill="#f0f0f0" stroke="#ccc" stroke-width="3" />
-        
-        <path id="pos-glottis" d="M 160 80 L 160 160 M 180 80 L 180 160" fill="none" stroke="#ddd" stroke-width="2" />
+        <path id="part-tongue" d="M 55 115 Q 90 100 130 135 Q 110 165 70 155 Z" fill="#fff5f5" stroke="#ffcccc" stroke-width="2"/>
 
-        <text x="170" y="45" font-size="10" fill="#bbb">鼻腔</text>
-        <text x="100" y="65" font-size="10" fill="#bbb">硬顎</text>
-        <text x="135" y="105" font-size="10" fill="#bbb">軟顎</text>
+        <path id="part-u-lip" d="M 33 85 Q 38 85 43 85" fill="none" stroke="#ffb3b3" stroke-width="8" stroke-linecap="round"/>
+        <path id="part-l-lip" d="M 33 118 Q 38 118 43 118" fill="none" stroke="#ffb3b3" stroke-width="8" stroke-linecap="round"/>
+
+        <path id="air-flow" d="M 140 140 Q 100 120 40 105" fill="none" stroke="#3498db" stroke-width="2" stroke-dasharray="5,5" style="display:none;"/>
     </svg>
-    <div id="pos-label" style="color: #3498db; font-weight: bold; margin-top: 10px; font-size: 1.1rem;">等待選取單字...</div>
+    <div id="part-desc" style="color: #666; font-size: 0.9rem; margin-top: 10px;">點擊注音符號查看發音位置</div>
 </div>
