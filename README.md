@@ -1,95 +1,86 @@
-Python 3.14.2 (tags/v3.14.2:df79316, Dec  5 2025, 17:18:21) [MSC v.1944 64 bit (AMD64)] on win32
-Enter "help" below or click "Help" above for more information.
 <!DOCTYPE html>
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
-    <title>發音部位全座標測試</title>
+    <title>注音發音部位座標校準器</title>
     <style>
-        body { font-family: sans-serif; background: #f0f0f0; display: flex; flex-direction: column; align-items: center; padding: 20px; }
-        .map-wrapper { position: relative; display: inline-block; background: white; padding: 10px; border-radius: 10px; box-shadow: 0 4px 15px rgba(0,0,0,0.2); }
-        #target-img { max-width: 600px; height: auto; display: block; }
+        body { font-family: "Microsoft JhengHei", sans-serif; background: #f4f7f6; display: flex; flex-direction: column; align-items: center; padding: 40px; }
+        .wrapper { display: flex; gap: 30px; background: white; padding: 20px; border-radius: 15px; box-shadow: 0 10px 25px rgba(0,0,0,0.1); }
         
-        /* 測試藍點樣式 */
-        .test-dot {
+        .image-container { position: relative; border: 1px solid #ddd; line-height: 0; }
+        #target-image { max-width: 500px; height: auto; cursor: crosshair; }
+
+        .dot {
             position: absolute;
-            width: 12px;
-            height: 12px;
-            background: #007bff;
+            width: 14px;
+            height: 14px;
+            background: #3498db;
             border: 2px solid white;
             border-radius: 50%;
             transform: translate(-50%, -50%);
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            color: white;
-            font-size: 9px;
-            font-weight: bold;
-            box-shadow: 0 0 5px rgba(0,0,0,0.5);
+            box-shadow: 0 0 8px rgba(52, 152, 219, 0.8);
+            pointer-events: none;
         }
-        .label-text {
-            position: absolute;
-            white-space: nowrap;
-            font-size: 12px;
-            color: #0056b3;
-            transform: translate(10px, -10px);
-            background: rgba(255,255,255,0.8);
-            padding: 2px 4px;
-            border-radius: 3px;
+
+        .data-panel { width: 350px; }
+        .code-box { 
+            background: #2c3e50; color: #ecf0f1; padding: 15px; border-radius: 8px; 
+            font-family: monospace; font-size: 14px; line-height: 1.6; white-space: pre-wrap;
+            margin-top: 10px;
         }
+        h3 { margin-top: 0; color: #2c3e50; }
+        .hint { color: #7f8c8d; font-size: 0.9rem; margin-bottom: 15px; }
     </style>
 </head>
 <body>
 
-    <h2>📍 發音部位座標對齊測試</h2>
-    <p>藍點應準確覆蓋在圖片的數字編號上</p>
+    <h2>📍 發音部位座標校準工具</h2>
+    <p class="hint">請點擊圖片中的數字編號，右側會自動生成可用於 MasterDictionary 的程式碼。</p>
 
-    <div class="map-wrapper" id="container">
-        <img id="target-img" src="https://upload.wikimedia.org/wikipedia/commons/thumb/7/75/Places_of_articulation.svg/500px-Places_of_articulation.svg.png">
+    <div class="wrapper">
+        <div class="image-container" id="container">
+            <img id="target-image" src="https://upload.wikimedia.org/wikipedia/commons/thumb/7/75/Places_of_articulation.svg/500px-Places_of_articulation.svg.png" alt="Articulation Map">
+            <div id="marker"></div>
         </div>
 
+        <div class="data-panel">
+            <h3>📋 點擊結果</h3>
+            <div id="display-text">請點擊圖片獲取座標...</div>
+            <div id="code-output" class="code-box">// 點擊後顯示程式碼</div>
+            <button onclick="copyCode()" style="margin-top:10px; cursor:pointer; padding:5px 10px;">複製程式碼</button>
+        </div>
+    </div>
+
     <script>
-        // 這是你整理的數據
-        // 注意：如果數據是像素(如 277)，我這裡暫時假設圖片原始寬度為 1000 來換算百分比
-        // 如果點位偏移嚴重，表示需要重新用校準器點擊獲取百分比
-        const testData = [
-            { id: "1上", name: "上唇", x: 9.1, y: 40.3 },
-            { id: "1下", name: "下唇", x: 4.3, y: 72.0 },
-            { id: "2上", name: "上齒", x: 14.7, y: 44.6 },
-            { id: "2下", name: "下齒", x: 9.9, y: 66.1 },
-            { id: "4", name: "齒齦", x: 27.7, y: 40.6 }, // 自動轉為百分比
-            { id: "5", name: "齒齦後", x: 32.5, y: 39.2 },
-            { id: "6", name: "硬腭前", x: 38.3, y: 36.3 },
-            { id: "7", name: "硬腭", x: 51.7, y: 37.4 },
-            { id: "8", name: "軟腭", x: 64.9, y: 39.5 },
-            { id: "9", name: "小舌", x: 72.3, y: 48.9 },
-            { id: "10", name: "咽腔壁", x: 84.9, y: 67.0 },
-            { id: "11", name: "聲門", x: 85.5, y: 91.2 },
-            { id: "12", name: "會厭", x: 74.5, y: 76.9 },
-            { id: "13", name: "舌根", x: 68.1, y: 68.9 },
-            { id: "14", name: "舌面後", x: 55.3, y: 56.6 },
-            { id: "15", name: "舌面前", x: 34.5, y: 55.2 },
-            { id: "16", name: "舌葉", x: 16.9, y: 56.6 },
-            { id: "17", name: "舌尖", x: 12.3, y: 61.1 },
-            { id: "18", name: "舌尖下", x: 19.3, y: 64.6 }
-        ];
-
         const container = document.getElementById('container');
+        const img = document.getElementById('target-image');
+        const marker = document.getElementById('marker');
+        const codeOutput = document.getElementById('code-output');
+        const displayText = document.getElementById('display-text');
 
-        testData.forEach(point => {
-            const dot = document.createElement('div');
-            dot.className = 'test-dot';
-            dot.style.left = point.x + '%';
-            dot.style.top = point.y + '%';
-            dot.innerText = point.id;
+        img.addEventListener('click', function(e) {
+            const rect = img.getBoundingClientRect();
+            
+            // 計算百分比座標
+            const x = ((e.clientX - rect.left) / rect.width * 100).toFixed(1);
+            const y = ((e.clientY - rect.top) / rect.height * 100).toFixed(1);
 
-            const label = document.createElement('span');
-            label.className = 'label-text';
-            label.innerText = point.name;
-            dot.appendChild(label);
+            // 放置標記點
+            marker.innerHTML = `<div class="dot" style="left: ${x}%; top: ${y}%;"></div>`;
 
-            container.appendChild(dot);
+            // 顯示文字資訊
+            displayText.innerHTML = `<strong>最後點擊位置：</strong> X: ${x}%, Y: ${y}%`;
+
+            // 生成字典格式程式碼
+            const codeSnippet = `pos: {x: ${x}, y: ${y}}`;
+            codeOutput.innerText = codeSnippet;
         });
+
+        function copyCode() {
+            const text = codeOutput.innerText;
+            navigator.clipboard.writeText(text).then(() => alert('已複製到剪貼簿！'));
+        }
     </script>
+
 </body>
 </html>
